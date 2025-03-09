@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { CardData } from '../../types/gameTypes';
-import Card from '../Card';
+import React, { useState, memo } from 'react';
+import { CardData } from '../../../game/state/types';
+import Card from '../../Card';
 
 interface HandAreaProps {
   hand: CardData[];
@@ -164,4 +164,5 @@ const HandArea: React.FC<HandAreaProps> = ({
   );
 };
 
-export default HandArea; 
+// Use memo to prevent unnecessary re-renders
+export default memo(HandArea); 

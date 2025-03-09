@@ -43,7 +43,6 @@ export interface CircleRequirement {
 export interface GameResources {
   gold: number;
   blood: number;
-  maxBlood: number;
   corruption: number;
   soulDebt: number;
   maxHandSize: number;

@@ -63,11 +63,6 @@ export const useContractSystem = ({ circle }: UseContractSystemProps): UseContra
         newResources.gold += 20;
         newResources.corruption += 10;
         break;
-      case "blood_pact":
-        newModifiers.goldMultiplier = 1.5;
-        newResources.maxBlood -= 3;
-        newResources.blood = Math.min(newResources.blood, newResources.maxBlood);
-        break;
       case "soul_mortgage":
         newModifiers.bloodCostReduction += 1;
         // Soul debt will increase per turn, handled in game logic
@@ -99,12 +94,6 @@ export const useContractSystem = ({ circle }: UseContractSystemProps): UseContra
       case "infernal_capacity":
         newModifiers.handSizeBonus += 5;
         // Corruption increase at start of level handled elsewhere
-        break;
-      case "strategic_advantage":
-        newModifiers.playsPerLevelBonus += 2;
-        newModifiers.discardsPerLevelBonus += 2;
-        newResources.maxBlood -= 5;
-        newResources.blood = Math.min(newResources.blood, newResources.maxBlood);
         break;
     }
 

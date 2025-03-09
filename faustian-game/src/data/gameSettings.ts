@@ -11,12 +11,11 @@
 export const INITIAL_RESOURCES = {
   gold: 0,
   blood: 5,       // Start with some blood to allow immediate play
-  maxBlood: 15,   // Maximum blood capacity
   corruption: 0,
   soulDebt: 0,
   maxHandSize: 10, // Increasing hand size to 10
   playsRemaining: 3, // Player can play 3 hands per level
-  discardsRemaining: 2, // Player can discard 2 times per level
+  discardsRemaining: 3, // Player can discard 3 times per level
 };
 
 /**

@@ -43,7 +43,6 @@ export const useGameState = (): UseGameStateReturn => {
   const [resources, setResources] = useState<GameResources>({
     gold: 0,
     blood: 0,
-    maxBlood: INITIAL_RESOURCES.maxBlood,
     corruption: 0,
     soulDebt: 0,
     maxHandSize: INITIAL_RESOURCES.maxHandSize,
@@ -144,7 +143,6 @@ export const useGameState = (): UseGameStateReturn => {
     setResources({
       gold: 0,
       blood: 0,
-      maxBlood: INITIAL_RESOURCES.maxBlood,
       corruption: 0,
       soulDebt: 0,
       maxHandSize: INITIAL_RESOURCES.maxHandSize,

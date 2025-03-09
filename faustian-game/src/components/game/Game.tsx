@@ -1,181 +1,79 @@
 import React, { useEffect } from 'react';
-import { useGameState } from '../../hooks/useGameState';
-import { useCardManagement } from '../../hooks/useCardManagement';
-import { useContractSystem } from '../../hooks/useContractSystem';
-import { calculateGoldTarget } from '../../utils/gameUtils';
-import { CARD_SETTINGS } from '../../data/gameSettings';
-import GameHeader from './GameHeader';
-import ResourcesBar from './ResourcesBar';
-import ActiveCards from './ActiveCards';
-import HandArea from './HandArea';
+import { useGameContext } from '../../game/state/GameContext';
+import { calculateGoldTarget } from '../../game/config/gameConfig';
+import { defaultConfig } from '../../game/config/gameConfig';
+
+// Import UI components
+import GameHeader from './ui/GameHeader';
+import ResourcesBar from './ui/ResourcesBar';
+import ActiveCardsArea from './ui/ActiveCardsArea';
+import HandArea from './ui/HandArea';
 import ContractShop from './ContractShop';
 import SignedContractsBanner from '../SignedContractsBanner';
-import { ContractData } from '../../types/gameTypes';
-
-// Define the ExtendedContractData interface locally to match what SignedContractsBanner expects
-interface ExtendedContractData extends ContractData {
-  contractKey: string;
-}
+import { ExtendedContractData, ContractData } from '../../game/state/types';
 
 const Game: React.FC = () => {
-  // Game state management
-  const {
-    resources,
-    gameState,
-    modifiers,
-    updateResources,
-    updateGameState,
-    updateModifiers,
-    resetGame,
-    setAnimatingGold,
-    moveToNextLevel,
-    moveToContractShop,
-    checkLevelComplete
-  } = useGameState();
-
-  // Contract system
-  const {
-    availableContractKeys,
-    signedContractKeys,
-    signContract,
-    applyContractEffects,
-    selectContractsForCircle,
-    getContractByKey,
-    hasContract
-  } = useContractSystem({ circle: gameState.circle });
-
-  // Get signed contracts objects with proper type
-  const signedContracts: ExtendedContractData[] = signedContractKeys
-    .map(key => {
-      const contract = getContractByKey(key);
-      if (contract) {
-        return {
-          ...contract,
-          contractKey: key
-        };
-      }
-      return null;
-    })
-    .filter((contract): contract is ExtendedContractData => contract !== null);
-
-  // Card management
-  const {
-    hand,
-    activeCards,
-    drawPile,
-    discardPile,
-    selectedCardIds,
-    usedCardIds,
+  // Get state and actions from context
+  const { 
+    state, 
+    dispatch,
     drawCards,
-    playSelectedCards: internalPlayCards,
-    discardSelectedCards: internalDiscardCards,
+    playSelectedCards,
+    discardSelectedCards,
     toggleCardSelection,
-    sortHandByValue,
-    sortHandBySin,
-    resetDeck,
-    getMaxHandSize,
-    clearActiveCards
-  } = useCardManagement({
-    initialResources: resources,
-    modifiers,
-    onGoldEarned: (gold: number) => {
-      setAnimatingGold(gold);
-      
-      // Check if level is complete
-      const goldTarget = calculateGoldTarget(gameState.circle, modifiers);
-      
-      if (checkLevelComplete(resources.gold + gold, goldTarget)) {
-        setTimeout(() => {
-          moveToContractShop();
-        }, 1000);
-      }
-    },
-    onResourceUpdate: updateResources
-  });
-
-  // Initialize game
+    sortCards
+  } = useGameContext();
+  
+  // Destructure state for easier access
+  const { gameState, resources, modifiers, cardState } = state;
+  
+  // Initialize game on component mount
   useEffect(() => {
-    resetGame();
-    resetDeck();
-    drawCards(getMaxHandSize());
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Handler for playing cards
-  const playSelectedCards = () => {
-    if (selectedCardIds.length === 0) {
-      updateGameState({
-        message: "Select cards to play first!"
-      });
-      return;
-    }
-    
-    if (resources.playsRemaining <= 0) {
-      updateGameState({
-        message: "No more plays remaining for this level!"
-      });
-      return;
-    }
-    
-    internalPlayCards();
-  };
-
-  // Handler for discarding cards
-  const discardSelectedCards = () => {
-    if (selectedCardIds.length === 0) {
-      updateGameState({
-        message: "Select cards to discard first!"
-      });
-      return;
-    }
-    
-    if (resources.discardsRemaining <= 0) {
-      updateGameState({
-        message: "No more discards remaining for this level!"
-      });
-      return;
-    }
-    
-    internalDiscardCards();
-  };
-
-  // Handler for signing contracts
+    dispatch({ type: 'INITIALIZE_GAME' });
+  }, [dispatch]);
+  
+  // Calculate gold target based on current circle and level
+  const goldTarget = calculateGoldTarget(
+    gameState.circle, 
+    gameState.level, 
+    defaultConfig
+  );
+  
+  // Handle contract signing
   const handleSignContract = (contractKey: string) => {
-    // Apply contract effects
-    const { newResources, newModifiers } = applyContractEffects(contractKey, resources, modifiers);
-    
-    // Update resources and modifiers
-    updateResources(newResources);
-    updateModifiers(newModifiers);
-    
-    // Sign the contract
-    signContract(contractKey);
-    
-    // Continue to next level
-    setTimeout(() => {
-      moveToNextLevel(hasContract("infernal_capacity"));
-      clearActiveCards();
-      
-      // Make sure the player has a full hand
-      setTimeout(() => {
-        drawCards(getMaxHandSize());
-      }, 300);
-    }, 1500);
+    dispatch({ 
+      type: 'SIGN_CONTRACT', 
+      payload: { contractKey } 
+    });
   };
-
-  // Handler for skipping contract selection
+  
+  // Handle skipping contract selection
   const skipContractSelection = () => {
-    moveToNextLevel(hasContract("infernal_capacity"));
-    clearActiveCards();
-    
-    // Make sure the player has a full hand
-    setTimeout(() => {
-      drawCards(getMaxHandSize());
-    }, 300);
+    dispatch({ type: 'SKIP_CONTRACT' });
   };
-
+  
+  // Sort cards by rank
+  const handleSortByRank = () => {
+    sortCards('rank');
+  };
+  
+  // Sort cards by sin
+  const handleSortBySin = () => {
+    sortCards('sin');
+  };
+  
+  // Temporary mock data for contracts until we implement contract state in context
+  const signedContracts: ExtendedContractData[] = [];
+  const availableContractKeys: string[] = [];
+  
+  // Mock contract getter function
+  const getContractByKey = (key: string): ContractData | undefined => {
+    return undefined;
+  };
+  
   return (
-    <div className="bg-black text-white min-h-screen p-4">
+    <div className="game-container bg-black text-white min-h-screen p-4">
+      {/* Game header with circle, level, turn info */}
       <GameHeader 
         circle={gameState.circle}
         level={gameState.level}
@@ -183,19 +81,20 @@ const Game: React.FC = () => {
         message={gameState.message}
       />
       
-      <main className="game-container mt-4">
-        {/* Resources bar */}
-        <ResourcesBar 
-          resources={resources}
-          goldTarget={calculateGoldTarget(gameState.circle, modifiers)}
-          animatingGold={gameState.animatingGold}
-          animationProgress={gameState.goldAnimationProgress}
-        />
-        
+      {/* Resources bar */}
+      <ResourcesBar 
+        resources={resources}
+        goldTarget={goldTarget}
+        animatingGold={gameState.animatingGold}
+        animationProgress={gameState.goldAnimationProgress}
+      />
+      
+      {/* Main game content */}
+      <main className="mt-4">
         {gameState.phase === 'gameplay' && (
           <>
             {/* Signed contracts banner */}
-            {signedContractKeys.length > 0 && (
+            {signedContracts.length > 0 && (
               <div className="mt-4">
                 <SignedContractsBanner 
                   signedContracts={signedContracts}
@@ -205,9 +104,9 @@ const Game: React.FC = () => {
             
             {/* Active cards area */}
             <div className="mt-4">
-              <ActiveCards 
-                activeCards={activeCards}
-                maxActiveCards={CARD_SETTINGS.maxActiveCards}
+              <ActiveCardsArea 
+                activeCards={cardState.activeCards}
+                maxActiveCards={defaultConfig.cardValues.maxActiveCards}
                 animationState={gameState.animationState}
                 animatingCards={gameState.animatingCards}
               />
@@ -216,31 +115,44 @@ const Game: React.FC = () => {
             {/* Hand area */}
             <div className="mt-4">
               <HandArea 
-                hand={hand}
-                drawPile={drawPile}
-                discardPile={discardPile}
-                selectedCardIds={selectedCardIds}
+                hand={cardState.hand}
+                drawPile={cardState.drawPile}
+                discardPile={cardState.discardPile}
+                selectedCardIds={cardState.selectedCardIds}
                 toggleCardSelection={toggleCardSelection}
                 onPlayCards={playSelectedCards}
                 onDiscardCards={discardSelectedCards}
-                onSortByRank={sortHandByValue}
-                onSortBySin={sortHandBySin}
+                onSortByRank={handleSortByRank}
+                onSortBySin={handleSortBySin}
                 playsRemaining={resources.playsRemaining}
                 discardsRemaining={resources.discardsRemaining}
-                maxHandSize={getMaxHandSize()}
+                maxHandSize={resources.maxHandSize}
               />
             </div>
           </>
         )}
         
-        {gameState.phase === 'contractShop' && (
+        {gameState.phase === 'contract_shop' && (
           <div className="mt-4">
-            <ContractShop
+            <ContractShop 
               availableContractKeys={availableContractKeys}
               getContractByKey={getContractByKey}
               onSignContract={handleSignContract}
               onSkip={skipContractSelection}
             />
+          </div>
+        )}
+        
+        {gameState.phase === 'game_over' && (
+          <div className="mt-4 text-center">
+            <h2 className="text-2xl text-red-500 font-bold">Game Over</h2>
+            <p className="mt-2 text-gray-400">Your soul belongs to the devil now.</p>
+            <button 
+              className="mt-4 px-6 py-2 bg-infernal-700 hover:bg-infernal-600 text-white rounded-lg"
+              onClick={() => dispatch({ type: 'INITIALIZE_GAME' })}
+            >
+              Try Again
+            </button>
           </div>
         )}
       </main>

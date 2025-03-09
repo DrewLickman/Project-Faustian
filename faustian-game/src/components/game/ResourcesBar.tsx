@@ -43,7 +43,7 @@ const ResourcesBar: React.FC<ResourcesBarProps> = ({
           <div>
             <span className="text-red-600 font-bold">Blood: </span>
             <span className="text-white">
-              {formatResourceNumber(resources.blood)} / {formatResourceNumber(resources.maxBlood)}
+              {formatResourceNumber(resources.blood)}
             </span>
           </div>
         </div>

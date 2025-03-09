@@ -105,7 +105,7 @@ export const useCardManagement = ({
       console.log('[drawCards] First-time initialization - generating new deck');
       const newDeck = shuffleDeck(generateFullDeck());
       
-      // Take cards for hand
+      // Take cards for hand from the top of the deck (treating it as a stack)
       const drawnCards = newDeck.slice(0, cardsNeeded);
       const remainingDeck = newDeck.slice(cardsNeeded);
       
@@ -125,9 +125,13 @@ export const useCardManagement = ({
     // Case 1: Draw pile has enough cards - simple case
     if (newDrawPile.length >= cardsNeeded) {
       console.log(`[drawCards] Drawing ${cardsNeeded} cards directly from draw pile`);
+      // Use splice to remove cards from the draw pile (treating it as a stack - LIFO)
+      // Take cards from the beginning of the array (top of the deck)
       const drawnCards = newDrawPile.splice(0, cardsNeeded);
       newHand = [...newHand, ...drawnCards];
       cardsDrawn = drawnCards.length;
+      
+      console.log(`[drawCards] Drew ${drawnCards.length} cards. Cards remaining in deck: ${newDrawPile.length}`);
     }
     // Case 2: Draw pile doesn't have enough cards, but we also have discard pile
     else if (newDrawPile.length > 0) {
@@ -238,22 +242,93 @@ export const useCardManagement = ({
       // Step 3: Move cards to the active cards area
       const newActiveCards = [...activeCards, ...cardsToPlay];
       
-      // Step 4: Update the state to reflect these changes
+      // Step 4: Calculate cards to draw after removal
+      const maxSize = getMaxHandSize();
+      const cardsToDraw = maxSize - newHand.length;
+      
+      // Step 5: Update the state to reflect these changes - do all updates at once
       setHand(newHand);
       setActiveCards(newActiveCards);
       setSelectedCardIds([]);
       
-      // Step 5: Apply sorting to maintain hand order preference
-      if (lastSortType === 'rank') {
-        sortHandByValue();
-      } else if (lastSortType === 'sin') {
-        sortHandBySin();
-      }
-      
       // Update used cards tracking
       updateUsedCards([...newHand, ...newActiveCards, ...discardPile]);
       
-      console.log(`[playSelectedCards] Successfully moved ${cardsToPlay.length} cards to active area. Hand: ${newHand.length}, Active: ${newActiveCards.length}`);
+      // Step 6: Update resources - decrease plays count
+      const updatedResources = {
+        ...resources,
+        playsRemaining: resources.playsRemaining - 1
+      };
+      
+      // Don't update resources right away - we'll let the onGoldEarned callback do that
+      // since we need to calculate gold earned first
+      
+      // Update local resources copy
+      setResources(updatedResources);
+      
+      // Step 7: Check for sin affinity bonus (5+ cards of the same sin type)
+      let goldMultiplier = 1;
+      const sinTypeCounts: Record<string, number> = {};
+      
+      // Count the occurrences of each sin type
+      cardsToPlay.forEach(card => {
+        sinTypeCounts[card.sinType] = (sinTypeCounts[card.sinType] || 0) + 1;
+      });
+      
+      // Check if any sin type has 5 or more cards
+      const maxSinTypeCount = Math.max(...Object.values(sinTypeCounts));
+      const dominantSinType = Object.keys(sinTypeCounts).find(sinType => sinTypeCounts[sinType] === maxSinTypeCount);
+      
+      if (maxSinTypeCount >= 5) {
+        goldMultiplier = 2; // Double gold for 5+ cards of the same sin
+        console.log(`[playSelectedCards] Sin affinity bonus! ${maxSinTypeCount} cards of ${dominantSinType} type. Gold multiplier: ${goldMultiplier}x`);
+      }
+      
+      // Step 8: Calculate gold earned from the played cards with multiplier
+      const baseGoldEarned = cardsToPlay.reduce((total, card) => total + card.goldValue, 0);
+      const goldEarned = Math.floor(baseGoldEarned * goldMultiplier);
+      
+      console.log(`[playSelectedCards] Successfully moved ${cardsToPlay.length} cards to active area. Hand: ${newHand.length}, Active: ${newActiveCards.length}, Gold earned: ${goldEarned} (Base: ${baseGoldEarned}, Multiplier: ${goldMultiplier}x)`);
+      
+      // Step 9: After a short delay, draw cards to refill hand
+      if (cardsToDraw > 0) {
+        setTimeout(() => {
+          drawCards(cardsToDraw);
+        }, 500);
+      }
+      
+      // Step 10: Process gold earned - this will trigger the animation
+      // After animation completes, the active cards will be cleared
+      if (goldEarned > 0) {
+        // First update the plays remaining and increment turn
+        onResourceUpdate({
+          ...resources,
+          playsRemaining: resources.playsRemaining - 1,
+          gold: resources.gold + goldEarned
+        });
+        
+        // Then trigger gold animation
+        onGoldEarned(goldEarned);
+        
+        // After gold animation, clear active cards and move them to discard
+        setTimeout(() => {
+          // Move active cards to discard pile
+          const newDiscardPile = [...discardPile, ...cardsToPlay];
+          setActiveCards([]);
+          setDiscardPile(newDiscardPile);
+          updateUsedCards([...hand, ...newDiscardPile]);
+        }, 1500); // Wait for gold animation to complete
+      } else {
+        // No gold earned, just update plays remaining
+        onResourceUpdate(updatedResources);
+        
+        // Move active cards to discard pile immediately
+        const newDiscardPile = [...discardPile, ...cardsToPlay];
+        setActiveCards([]);
+        setDiscardPile(newDiscardPile);
+        updateUsedCards([...hand, ...newDiscardPile]);
+      }
+      
       return true;
     } catch (error) {
       console.error("[playSelectedCards] Error playing cards:", error);
@@ -274,28 +349,51 @@ export const useCardManagement = ({
       const cardsToDiscard = hand.filter(card => selectedCardIds.includes(card.id));
       console.log(`[discardSelectedCards] Selected ${cardsToDiscard.length} cards to discard`);
       
+      // Store the number of cards being discarded
+      const numCardsDiscarded = cardsToDiscard.length;
+      
       // Step 2: Create a new hand array without the discarded cards
       const newHand = hand.filter(card => !selectedCardIds.includes(card.id));
       
       // Step 3: Move cards to the discard pile (which is not visible to the player)
       const newDiscardPile = [...discardPile, ...cardsToDiscard];
       
-      // Step 4: Update the state to reflect these changes
+      // Step 4: Calculate blood gained from discarding - based on each card's bloodCost
+      const bloodGained = cardsToDiscard.reduce((total, card) => total + card.bloodCost, 0);
+      console.log(`[discardSelectedCards] Blood gained from discarding: ${bloodGained} (based on individual card blood costs)`);
+      
+      // Step 5: Update the state to reflect these changes - do all updates at once
       setHand(newHand);
       setDiscardPile(newDiscardPile);
       setSelectedCardIds([]);
       
-      // Step 5: Apply sorting to maintain hand order preference
-      if (lastSortType === 'rank') {
-        sortHandByValue();
-      } else if (lastSortType === 'sin') {
-        sortHandBySin();
-      }
-      
       // Update used cards tracking
       updateUsedCards([...newHand, ...activeCards, ...newDiscardPile]);
       
-      console.log(`[discardSelectedCards] Successfully moved ${cardsToDiscard.length} cards to discard pile. Hand: ${newHand.length}, Discard: ${newDiscardPile.length}`);
+      // Step 6: Update resources - decrease discard count and add blood
+      const updatedResources = {
+        ...resources,
+        discardsRemaining: resources.discardsRemaining - 1,
+        blood: resources.blood + bloodGained
+      };
+      onResourceUpdate(updatedResources);
+      
+      // Update local resources copy
+      setResources(updatedResources);
+      
+      console.log(`[discardSelectedCards] Successfully moved ${numCardsDiscarded} cards to discard pile. Hand: ${newHand.length}, Discard: ${newDiscardPile.length}`);
+      
+      // Step 7: After a short delay, draw the same number of cards that were discarded
+      if (numCardsDiscarded > 0) {
+        console.log(`[discardSelectedCards] Will draw ${numCardsDiscarded} cards to replace discarded cards`);
+        setTimeout(() => {
+          console.log(`[discardSelectedCards] Drawing ${numCardsDiscarded} cards now`);
+          drawCards(numCardsDiscarded);
+        }, 500);
+      } else {
+        console.log("[discardSelectedCards] No cards to draw (no cards were discarded)");
+      }
+      
       return true;
     } catch (error) {
       console.error("[discardSelectedCards] Error discarding cards:", error);
